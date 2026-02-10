@@ -51,7 +51,6 @@ class BinanceSpotClient:
             }
             self.exchange.options["fetchCurrencies"] = False
 
-        # warm up markets for precision helpers
         try:
             self.exchange.load_markets()
         except Exception as e:
@@ -91,20 +90,13 @@ class BinanceSpotClient:
         return float(t["last"])
 
     def get_min_notional(self, symbol: str) -> float:
-        """Return minimum notional (quote value) required for an order on this symbol.
-
-        Binance may reject market orders if the quote value is below MIN_NOTIONAL/NOTIONAL filter.
-        We try multiple sources (ccxt limits then raw exchange filters) and return 0.0 if unknown.
-        """
         try:
             m = self.exchange.market(symbol)
 
-            # 1) ccxt normalized limits (if available)
             cost_min = (((m.get("limits") or {}).get("cost") or {}).get("min"))
             if cost_min is not None:
                 return float(cost_min)
 
-            # 2) raw Binance filters
             info = m.get("info") or {}
             filters = info.get("filters") or []
             for f in filters:
@@ -132,25 +124,16 @@ class BinanceSpotClient:
     def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         return self.exchange.cancel_order(str(order_id), symbol)
 
-    # ----------------------------
-    # Precision helpers (STRING!)
-    # ----------------------------
     def floor_amount(self, symbol: str, amount: float) -> float:
-        """
-        Returns float but derived from amount_to_precision (string) to avoid float artifacts.
-        """
         try:
-            s = self.exchange.amount_to_precision(symbol, amount)  # string like "0.00018"
+            s = self.exchange.amount_to_precision(symbol, amount)
             return float(s)
         except Exception:
             return float(amount)
 
     def floor_price(self, symbol: str, price: float) -> float:
-        """
-        Returns float but derived from price_to_precision (string) to avoid float artifacts.
-        """
         try:
-            s = self.exchange.price_to_precision(symbol, price)  # string like "76253.90"
+            s = self.exchange.price_to_precision(symbol, price)
             return float(s)
         except Exception:
             return float(price)
@@ -161,9 +144,6 @@ class BinanceSpotClient:
     def _price_str(self, symbol: str, price: float) -> str:
         return str(self.exchange.price_to_precision(symbol, price))
 
-    # ----------------------------
-    # Orders
-    # ----------------------------
     def place_market_buy_by_quote(self, symbol: str, quote_amount: float) -> Dict[str, Any]:
         self._guard(symbol, quote_amount=quote_amount)
         try:
@@ -173,7 +153,6 @@ class BinanceSpotClient:
             raise ExchangeClientError(f"Market buy failed: {e}")
 
     def place_market_sell(self, symbol: str, base_amount: float) -> Dict[str, Any]:
-        """Market sell by base amount."""
         self._guard(symbol)
         try:
             amt = float(self.exchange.amount_to_precision(symbol, base_amount))
@@ -202,10 +181,6 @@ class BinanceSpotClient:
             raise ExchangeClientError(f"Stop-loss-limit sell failed: {e}")
 
     def place_oco_sell(self, symbol: str, base_amount: float, tp_price: float, sl_stop_price: float, sl_limit_price: float) -> Dict[str, Any]:
-        """
-        Native Binance Spot OCO (single reserve).
-        IMPORTANT: use STRING precision to avoid -1111 price precision errors.
-        """
         self._guard(symbol)
         try:
             qty = self._amount_str(symbol, base_amount)
@@ -223,7 +198,6 @@ class BinanceSpotClient:
                 "stopLimitTimeInForce": "GTC",
             }
 
-            # direct endpoint call (stable)
             res = self.exchange.privatePostOrderOco(payload)
             return {"raw": res}
         except Exception as e:
