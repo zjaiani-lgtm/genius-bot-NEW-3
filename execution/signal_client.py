@@ -1,4 +1,3 @@
-# execution/signal_client.py
 import json
 import os
 import hashlib
@@ -19,10 +18,6 @@ def _safe_float(x: Any) -> Optional[float]:
 
 
 def _fingerprint(signal: Dict[str, Any]) -> str:
-    """
-    Stable fingerprint for idempotency.
-    IMPORTANT: do NOT use uuid/signal_id inside hash.
-    """
     verdict = str(signal.get("final_verdict") or "").upper().strip()
 
     execution = signal.get("execution") or {}
@@ -40,10 +35,6 @@ def validate_signal(signal: Dict[str, Any]) -> None:
         raise ValueError("SIGNAL_NOT_DICT")
 
     verdict = str(signal.get("final_verdict") or "").upper().strip()
-    # Supported verdicts:
-    # - TRADE: open LONG position (MARKET buy)
-    # - HOLD: no-op
-    # - SELL: close position early (market sell) by canceling active OCO
     if verdict not in ("TRADE", "HOLD", "SELL"):
         raise ValueError("INVALID_VERDICT")
 
@@ -60,8 +51,7 @@ def validate_signal(signal: Dict[str, Any]) -> None:
         raise ValueError("MISSING_EXEC_SYMBOL")
     if direction != "LONG":
         raise ValueError("INVALID_DIRECTION")
-    # For TRADE we require MARKET entry + sizing.
-    # For SELL we only require the symbol + direction. Size is optional (we sell what's free).
+
     if verdict == "TRADE":
         if entry_type != "MARKET":
             raise ValueError("INVALID_ENTRY_TYPE")
@@ -106,7 +96,6 @@ def append_signal(signal: Dict[str, Any], outbox_path: str) -> None:
     data = _read_outbox(outbox_path)
     signals: List[Dict[str, Any]] = data.get("signals", [])
 
-    # soft dedupe in outbox (DB dedupe is the real safety net)
     if any((s.get("_fingerprint") == fp) for s in signals[-50:]):
         logger.info(f"OUTBOX_DEDUPED | fingerprint={fp}")
         return
@@ -117,10 +106,6 @@ def append_signal(signal: Dict[str, Any], outbox_path: str) -> None:
 
 
 def pop_next_signal(outbox_path: str) -> Optional[Dict[str, Any]]:
-    """
-    Pops FIFO: takes the oldest signal from outbox.
-    Atomic rewrite.
-    """
     data = _read_outbox(outbox_path)
     signals: List[Dict[str, Any]] = data.get("signals", [])
     if not signals:
