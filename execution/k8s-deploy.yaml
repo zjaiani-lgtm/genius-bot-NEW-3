@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: algo-bot-v3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: algo-bot
+  template:
+    metadata:
+      labels:
+        app: algo-bot
+    spec:
+      containers:
+        - name: bot
+          image: algo-bot:v3
+          imagePullPolicy: Never
