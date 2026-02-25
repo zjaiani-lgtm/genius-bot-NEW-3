@@ -1,18 +1,60 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: algo-bot-v3
+  name: elite-long-spot-bot
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: algo-bot
+      app: elite-long-spot-bot
   template:
     metadata:
       labels:
-        app: algo-bot
+        app: elite-long-spot-bot
     spec:
       containers:
         - name: bot
-          image: algo-bot:v3
-          imagePullPolicy: Never
+          image: your-registry/elite-long-spot-bot:latest
+          imagePullPolicy: Always
+          env:
+            - name: EXCHANGE
+              value: "binance" # or bybit
+            - name: SYMBOLS
+              value: "BTCUSDT,SOLUSDT"
+            - name: PRIMARY_TF
+              value: "15m"
+            - name: SECONDARY_TF
+              value: "30m"
+            - name: CONFIRM_TF
+              value: "1h"
+            - name: DB_URL
+              value: "sqlite+aiosqlite:////data/trades.db"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: BINANCE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bot-secrets
+                  key: BINANCE_API_KEY
+            - name: BINANCE_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bot-secrets
+                  key: BINANCE_API_SECRET
+            - name: BYBIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bot-secrets
+                  key: BYBIT_API_KEY
+            - name: BYBIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bot-secrets
+                  key: BYBIT_API_SECRET
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          args: ["python", "-m", "elite_bot", "live", "--exchange", "$(EXCHANGE)"]
+      volumes:
+        - name: data
+          emptyDir: {}
