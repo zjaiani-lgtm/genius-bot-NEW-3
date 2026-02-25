@@ -1,62 +1,78 @@
 from __future__ import annotations
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+from dataclasses import dataclass
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+def _get_bool(key: str, default: bool) -> bool:
+    v = os.getenv(key)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
-    # General
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-    db_url: str = Field(default="sqlite+aiosqlite:///./trades.db", alias="DB_URL")
 
-    symbols: str = Field(default="BTCUSDT,SOLUSDT", alias="SYMBOLS")
+@dataclass(frozen=True)
+class Settings:
+    # Exchanges
+    EXCHANGE: str = os.getenv("EXCHANGE", "binance").strip().lower()  # binance | bybit
+    MODE: str = os.getenv("MODE", "LIVE").strip().upper()  # LIVE only (spot)
 
-    primary_tf: str = Field(default="15m", alias="PRIMARY_TF")
-    secondary_tf: str = Field(default="30m", alias="SECONDARY_TF")
-    confirm_tf: str = Field(default="1h", alias="CONFIRM_TF")
+    # Symbols / TF
+    SYMBOLS: list[str] = tuple(s.strip().upper() for s in os.getenv("SYMBOLS", "BTCUSDT,SOLUSDT").split(",") if s.strip())  # type: ignore
+    PRIMARY_TF: str = os.getenv("PRIMARY_TF", "15m")
+    SECONDARY_TF: str = os.getenv("SECONDARY_TF", "30m")
+    CONFIRM_TF: str = os.getenv("CONFIRM_TF", "1h")
 
-    # Strategy
-    ema_fast: int = Field(default=50, alias="EMA_FAST")
-    ema_slow: int = Field(default=200, alias="EMA_SLOW")
-    rsi_period: int = Field(default=14, alias="RSI_PERIOD")
-    rsi_long_min: float = Field(default=55.0, alias="RSI_LONG_MIN")
-    atr_period: int = Field(default=14, alias="ATR_PERIOD")
+    # Strategy defaults
+    EMA_FAST: int = int(os.getenv("EMA_FAST", "50"))
+    EMA_SLOW: int = int(os.getenv("EMA_SLOW", "200"))
+    RSI_PERIOD: int = int(os.getenv("RSI_PERIOD", "14"))
+    RSI_LONG_MIN: float = float(os.getenv("RSI_LONG_MIN", "55"))
+    ATR_PERIOD: int = int(os.getenv("ATR_PERIOD", "14"))
 
     # Risk
-    position_pct: float = Field(default=0.03, alias="POSITION_PCT")
-    stop_atr_mult: float = Field(default=1.5, alias="STOP_ATR_MULT")
-    tp_atr_mult: float = Field(default=3.0, alias="TP_ATR_MULT")
-    trailing_enabled: bool = Field(default=True, alias="TRAILING_ENABLED")
-    cooldown_candles: int = Field(default=3, alias="COOLDOWN_CANDLES")
-    max_positions_per_symbol: int = Field(default=1, alias="MAX_POSITIONS_PER_SYMBOL")
+    POSITION_PCT: float = float(os.getenv("POSITION_PCT", "0.03"))  # 3% balance in USDT
+    STOP_ATR_MULT: float = float(os.getenv("STOP_ATR_MULT", "1.5"))
+    TP_ATR_MULT: float = float(os.getenv("TP_ATR_MULT", "3.0"))
+    TRAILING_ENABLED: bool = _get_bool("TRAILING_ENABLED", True)
+    COOLDOWN_CANDLES: int = int(os.getenv("COOLDOWN_CANDLES", "3"))
+    MAX_POSITIONS_PER_SYMBOL: int = int(os.getenv("MAX_POSITIONS_PER_SYMBOL", "1"))
 
-    taker_fee: float = Field(default=0.001, alias="TAKER_FEE")
-    maker_fee: float = Field(default=0.001, alias="MAKER_FEE")
-    slippage_bps: float = Field(default=5.0, alias="SLIPPAGE_BPS")
+    # Fees / slippage assumptions (spot)
+    TAKER_FEE: float = float(os.getenv("TAKER_FEE", "0.001"))  # 0.1%
+    MAKER_FEE: float = float(os.getenv("MAKER_FEE", "0.001"))
+    SLIPPAGE_BPS: float = float(os.getenv("SLIPPAGE_BPS", "5"))  # 5 bps = 0.05%
 
-    partial_tp_pct: float = Field(default=0.5, alias="PARTIAL_TP_PCT")
+    # Partial TP
+    PARTIAL_TP_PCT: float = float(os.getenv("PARTIAL_TP_PCT", "0.5"))  # 50% off at TP
 
-    # ML Filter
-    ml_enabled: bool = Field(default=True, alias="ML_ENABLED")
-    ml_min_proba: float = Field(default=0.55, alias="ML_MIN_PROBA")
+    # ML
+    ML_ENABLED: bool = _get_bool("ML_ENABLED", True)
+    ML_MIN_PROBA: float = float(os.getenv("ML_MIN_PROBA", "0.55"))
 
-    # Binance
-    binance_base_url: str = Field(default="https://api.binance.com", alias="BINANCE_BASE_URL")
-    binance_ws_url: str = Field(default="wss://stream.binance.com:9443/ws", alias="BINANCE_WS_URL")
-    binance_api_key: str = Field(default="", alias="BINANCE_API_KEY")
-    binance_api_secret: str = Field(default="", alias="BINANCE_API_SECRET")
+    # DB
+    DB_PATH: str = os.getenv("DB_PATH", "./trades_v3.db")
 
-    # Bybit
-    bybit_base_url: str = Field(default="https://api.bybit.com", alias="BYBIT_BASE_URL")
-    bybit_ws_url: str = Field(default="wss://stream.bybit.com/v5/public/spot", alias="BYBIT_WS_URL")
-    bybit_api_key: str = Field(default="", alias="BYBIT_API_KEY")
-    bybit_api_secret: str = Field(default="", alias="BYBIT_API_SECRET")
+    # Binance endpoints
+    BINANCE_BASE_URL: str = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
+    BINANCE_WS_URL: str = os.getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443/ws")
+    BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
+    BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
+
+    # Bybit endpoints (V5 Spot)
+    BYBIT_BASE_URL: str = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
+    BYBIT_WS_URL: str = os.getenv("BYBIT_WS_URL", "wss://stream.bybit.com/v5/public/spot")
+    BYBIT_API_KEY: str = os.getenv("BYBIT_API_KEY", "")
+    BYBIT_API_SECRET: str = os.getenv("BYBIT_API_SECRET", "")
 
     # Runtime
-    poll_open_orders_seconds: float = 2.5
-    poll_balance_seconds: float = 10.0
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+    WS_RECONNECT_MAX_DELAY: float = float(os.getenv("WS_RECONNECT_MAX_DELAY", "10"))
+    REST_RATE_PER_SEC: float = float(os.getenv("REST_RATE_PER_SEC", "8"))
+    REST_BURST: float = float(os.getenv("REST_BURST", "16"))
 
-    def symbol_list(self) -> list[str]:
-        return [s.strip().upper() for s in self.symbols.split(",") if s.strip()]
+    # Backtest
+    BACKTEST_START_BALANCE: float = float(os.getenv("BACKTEST_START_BALANCE", "10000"))
