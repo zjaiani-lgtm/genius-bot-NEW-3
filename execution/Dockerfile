@@ -5,15 +5,11 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt /app/requirements.txt
+COPY execution/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY src /app/src
+COPY execution /app/execution
 
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app
 
-CMD ["python", "-m", "elite_bot", "live", "--exchange", "binance"]
+CMD ["python", "-m", "execution.main"]
